@@ -34,7 +34,8 @@ arima_modeling <- function(xts, ts, ticker){
   ## Forecasting using an ARIMA Model
   print(ticker)
   tsforecasts <- forecast(tsarima, h = 30) # forecast the next 120 time series
-  accuracy(tsforecasts, head(tail(xts, 30), 7))
+  acc <- accuracy(tsforecasts, head(tail(xts, 30), 7))
+  print(acc)
   autoplot(tsforecasts)
   
   print(ticker)

@@ -1,6 +1,8 @@
 # Stock-Time-Series-Analysis
 Mathematical modeling for finantial time series data
 
+Data and kernels can also found in [kaggle][3].
+
 ### Context
 
 Stock market data can be interesting to analyze and as a further incentive, strong predictive models can have large financial payoff. The amount of financial data on the web is seemingly endless. A large and well structured dataset on a wide array of companies can be hard to come by. Here provided a dataset with historical stock prices (last 12 years) for 29 of 30 DJIA companies (excluding 'V' because it does not have the whole 12 years data).
@@ -55,3 +57,4 @@ This data is scrapped from Google finance using the python library 'pandas_datar
 
   [1]: https://github.com/szrlee/Stock-Time-Series-Analysis/blob/master/data_collection.ipynb
   [2]: https://github.com/szrlee/Stock-Time-Series-Analysis/blob/master/ARIMA_R/script.Rmd
+  [3]: https://www.kaggle.com/szrlee/stock-time-series-20050101-to-20171231

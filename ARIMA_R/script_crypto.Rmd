@@ -1,0 +1,279 @@
+---
+title: 'Time Series Analysis'
+date: '`r Sys.Date()`'
+output:
+  html_document:
+    number_sections: true
+    toc: true
+    fig_width: 7
+    fig_height: 4.5
+    theme: cosmo
+    highlight: tango
+    code_folding: hide
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+knitr::opts_chunk$set(echo=TRUE, error=FALSE)
+```
+
+# Introduction
+This notebook provides a step-by-step guide for fitting an ARIMA model on the stock data, using R.
+
+References:
+
+- [Little book of R for time series](https://a-little-book-of-r-for-time-series.readthedocs.io/en/latest/src/timeseries.html)
+- [ARIMA Models](https://sites.google.com/site/econometricsacademy/econometrics-models/time-series-arima-models)
+
+# Load libraries and set global parameters
+```{r}
+packages =  c("ggplot2", "dplyr", "tidyr", "data.table", 'corrplot', 'gridExtra', 'forecast', 'tseries', 'TSA', 'tibble', 'TTR', 'xts', 'dygraphs', 'assertthat')
+
+my.install <- function(pkg, ...){
+  if (!(pkg %in% installed.packages()[,1])) {
+    install.packages(pkg)
+  }
+  return (library(pkg, ...))
+}
+
+purrr::walk(packages, my.install, character.only = TRUE, warn.conflicts = FALSE)
+
+
+```
+
+# Read Data
+```{r}
+s_data <- read.csv(file ="../crypto/crypto-markets.csv")
+```
+
+# Data overview
+We will use 'summary' and 'str' fuctions of R to look at the data.
+```{r}
+summary(s_data)
+str(s_data)
+```
+
+The data has some missing values, which we will replace with zero. Also, 'Date' feature is listed as factor, we will convert that to 'Date' structure.
+
+# Data cleaning
+```{r}
+s_data[is.na(s_data)] <- 0
+s_data$date <- as.Date(s_data$date, format = "%Y-%m-%d")
+summary(s_data)
+str(s_data)
+```
+
+<!-- # Lets look at some univariate distributions - AllStocks Data -->
+<!-- ```{r} -->
+<!-- options(repr.plot.width=12, repr.plot.height=12)  -->
+
+<!-- p1 = ggplot(s_data, aes(open)) + geom_histogram(bins = 50, aes(y = ..density..), col = "red", fill = "red", alpha = 0.3) + geom_density()# + xlim(c(0, 1000)) -->
+
+<!-- p2 = ggplot(s_data, aes(high)) + geom_histogram(bins = 50, aes(y = ..density..), col = "red", fill = "red", alpha = 0.3) + geom_density()# + xlim(c(0, 1000)) -->
+
+<!-- p3 = ggplot(s_data, aes(low)) + geom_histogram(bins = 50, aes(y = ..density..), col = "red", fill = "red", alpha = 0.3) + geom_density()# + xlim(c(0, 1000)) -->
+
+<!-- p4 = ggplot(s_data, aes(close)) + geom_histogram(bins = 50, aes(y = ..density..), col = "red", fill = "red", alpha = 0.3) + geom_density()# + xlim(c(0, 1000)) -->
+
+<!-- grid.arrange(p1,p2,p3,p4, nrow=2,ncol=2) -->
+<!-- ``` -->
+
+# Time Series Analysis
+
+Before we start with the time series analysis, lets go through the theory in brief.
+
+What is AutoRegressive or AR model:
+
+Autoregressive (AR) models are models where the value of variable in one period is related to the values in the previous period.
+AR(p) is a Autoregressive model with p lags.
+  
+What is Moving Average or MA model:
+
+Moving average (MA) model accounts for the possibility of a relationship between a variable and the residual from the previous period.
+MA(q) is a Moving Average model with q lags.
+
+What is ARMA model:
+Autoregressive moving average model combines both p auto regressive terms and q Moving average terms, also called ARMA(p,q)
+
+  
+Now lets look at some individual stocks and individual time series (Open, Close, High, Low, Volume)
+
+```{r}
+
+candidate_ticker <- c("TRX", "BTC")
+candidate_num <- length(candidate_ticker)
+stock_list <- vector(mode="list", length=candidate_num)
+names(stock_list) <- candidate_ticker
+i = 1
+for (ticker in candidate_ticker){
+  stock_list[[i]] <- filter(s_data, symbol == ticker)
+  # print(stock_list[[i]])
+  i <- i+1
+  # print(ticker)
+}
+str(stock_list)
+```
+
+<!-- # Create time series -->
+<!-- We will use tsclean and ts function of R to create a time series. -->
+
+<!-- tsclean() is a convenient method for outlier removal and inputing missing values -->
+
+<!-- ts() is used to create time-series objects -->
+<!-- ```{r} -->
+<!-- # Create a daily Date object -->
+<!-- inds <- seq(as.Date("2005-01-01"), as.Date("2017-12-31"), by = "day") -->
+
+<!-- create_ts <- function(col_idx){ -->
+<!--   # Create a time series object -->
+<!--   ts <- as.numeric(stock[,col_idx]) %>% -->
+<!--     tsclean(replace.missing = TRUE, lambda = NULL) %>% -->
+<!--     ts(start = c(2005, as.numeric(format(inds[1], "%j"))), -->
+<!--              frequency = 365.25) -->
+<!--    return(ts) -->
+<!-- } -->
+
+<!-- ts = create_ts(which(colnames(stock) == "High")) -->
+<!-- ``` -->
+
+
+# Create and plot Time Series - High
+
+There are 5 time series in the data provided - (High, Low, Open, Close, Volume). We will look at the High values first.
+
+```{r}
+xts_list <- vector(mode="list", length=candidate_num)
+ts_list <- vector(mode="list", length=candidate_num)
+
+names(xts_list) = candidate_ticker
+names(ts_list) = candidate_ticker
+
+for (ticker in candidate_ticker){
+  stock = stock_list[[ticker]]
+  xts = xts(stock$close, order.by=stock$date)
+  attr(xts, 'frequency') <- length(xts)/30
+  ts = as.ts(xts, start = c(1))
+  xts_list[[ticker]] <- xts
+  ts_list[[ticker]] <- ts
+}
+xts_table= do.call(cbind, xts_list)
+dygraph(xts_table, xlab = "Time", ylab = "High value", main = "Time Series") %>%
+  # dySeries(labels.default()) %>%
+  # dyOptions(colors = c("red")) %>%
+  dyRangeSelector()
+```
+Next we will first demostrate the time series modeling process on 'GOOGL'.
+
+# Stationarity
+What is stationary time series?
+
+  A stationary process has a mean and variance that do not change overtime and the process does not have trend.
+  
+  The above time series does not look stationary.
+  
+  To confirm that we will use "Dickey-Fuller test" to determine stationarity. 
+  
+Dickey-Fuller test for variable
+
+```{r}
+xts = xts_list[['TRX']]
+ts = ts_list[['TRX']]
+adf.test(xts, alternative = "stationary", k = 0)
+```
+
+
+# Decomposing Time Series
+Decomposing a time series involves separating the time series into trend and irregular components.
+We test both the additive model and multiplicative model.
+
+```{r}
+tscomponents_add <- decompose(ts, type = "additive")
+tscomponents_mul <- decompose(ts, type = "multiplicative")
+plot(tscomponents_add, col = "red")
+plot(tscomponents_mul, col = "blue")
+```
+
+# Differencing a Time Series
+Differencing is a common solution used to stationarize the variable.
+We will perform differencing using R function diff.
+
+Consider fractional difference?
+```{r}
+xtsdiff1 <- diff(xts, differences=1)
+tsdiff1 <- diff(ts, differences=1)
+plot.xts(xtsdiff1, col = "blue")
+adf.test(tsdiff1, alternative = "stationary", k = 0)
+
+findfrequency(xts)          # find dominant frequency of original time series
+findfrequency(xtsdiff1)     # find dominant frequency of differenced time series
+```
+
+The time series (above) appears to be stationary.
+
+# Selecting a Candidate ARIMA Model
+The next step is to select appropriate ARIMA model, which means finding the most appropriate values of p and q for an ARIMA(p,d,q) model. You usually need to examine the correlogram and partial correlogram of the stationary time series for this.
+To plot a correlogram and partial correlogram, we can use the acf() and pacf() functions in R, respectively.
+
+```{r}
+Acf(xtsdiff1, lag.max=60)             # plot a correlogram
+Acf(xtsdiff1, lag.max=60, plot=FALSE) # get the autocorrelation values
+```
+
+
+```{r}
+Pacf(xtsdiff1, lag.max=60)             # plot a partial correlogram
+Pacf(xtsdiff1, lag.max=60, plot=FALSE) # get the partial autocorrelation values
+```
+
+Now, we could compare the sample ACF and PACF to those of various theoretical ARMA models. Use properties of ACF & PACF as a guide to estimate plausible models and select appropriate p, q and d. Alternative to this is discussed next.
+
+# Fitting an ARIMA Model
+  R provides a function auto.arima, which returns best ARIMA model according to either AIC, AICc or BIC value. The function conducts a search over possible model within the order constraints provided.
+  
+  We train 6 models with different training data.
+  For example, the model 'tsarima240' is trained with the whole time series exluding the last 240 daily data.
+  
+```{r}
+tsarima <- auto.arima(xts, max.p = 3, max.q = 3, max.d = 3)   #7
+print(tsarima)
+autoplot(tsarima)
+
+tsarima7 <- auto.arima(head(xts, -7), max.p = 3, max.q = 3, max.d = 3)   #7
+print(tsarima7)
+autoplot(tsarima7)
+```
+
+# Forecasting using an ARIMA Model
+```{r}
+tsforecasts <- forecast(tsarima, h = 2) # forecast the next 7 time series
+
+autoplot(tsforecasts)
+accuracy(tsforecasts)
+
+tsforecasts7 <- forecast(tsarima7, h = 7) # forecast the next 7 time series
+
+autoplot(tsforecasts7)
+accuracy(tsforecasts7, head(tail(xts, 7), 7))
+
+# 
+# tsdiff1forecasts <- forecast(tsdiff1arima, h = 120) # forecast the next 120 time series
+# accuracy(tsdiff1forecasts, tail(xts, 120))
+# autoplot(tsdiff1forecasts)
+```
+
+```{r}
+# plot.ts(tsforecasts$residuals)            # make time plot of forecast errors
+
+print('tsforecasts7')
+ggplot(data.frame(residuals = tsforecasts7$residuals), aes(residuals)) + geom_histogram(bins = 50, aes(y = ..density..), col = "red", fill = "red", alpha = 0.3) + geom_density()# make a histogram
+checkresiduals(tsforecasts7)
+
+# 
+# ggplot(data.frame(residuals = tsdiff1forecasts$residuals), aes(residuals)) + geom_histogram(bins = 50, aes(y = ..density..), col = "red", fill = "red", alpha = 0.3) + geom_density()# make a histogram
+# checkresiduals(tsdiff1forecasts)
+```
+
+The forecast errors seem to be normally distributed with mean zero and constant variance, the ARIMA model does seem to provide an adequate predictive model
+
+
+Here we looked at how to best fit ARIMA model to univariate time series.
+Next thing that I'll work on is Multivariate Time Series Forecasting using neural net.
